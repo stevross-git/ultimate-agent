@@ -2,7 +2,6 @@
 Ultimate Agent Core - Main Agent Coordination
 Fixed version with proper node registration
 """
-
 import asyncio
 import logging
 import json
@@ -35,6 +34,14 @@ from ..network.discovery.service_discovery import DiscoveryClient
 from ..plugins import PluginManager
 from ..remote.command_handler import RemoteCommandHandler
 
+# Registry integration import
+try:
+    from ..ai.registry_integration import integrate_registry
+    REGISTRY_INTEGRATION_AVAILABLE = True
+except ImportError:
+    REGISTRY_INTEGRATION_AVAILABLE = False
+    print("⚠️ Registry integration not available")
+
 try:
     from ..ai.local_models.local_ai_manager import (
         create_local_ai_manager,
@@ -45,11 +52,13 @@ except ImportError:  # pragma: no cover - optional dependency
     LOCAL_AI_AVAILABLE = False
     print("⚠️ Local AI not available")
 
+
 def serialize_for_json(obj):
     """Serialize object for JSON response"""
     if hasattr(obj, '__dict__'):
         return {k: v for k, v in obj.__dict__.items() if not k.startswith('_')}
     return str(obj)
+
 
 class UltimateAgent:
     """Main Ultimate Agent coordination class"""
@@ -59,7 +68,7 @@ class UltimateAgent:
         self.logger = setup_logging("UltimateAgent")
         self.running = False
         self.modules = {}
-
+        
         # ✅ Add these
         self.agent_id = self.config.get("agent_id", "agent-001")
         self.ai_manager = None
@@ -71,14 +80,49 @@ class UltimateAgent:
         }
         self.current_tasks = {}
         self.completed_tasks = []
-
+        
         # Remote command handler
         from ..remote.handler import RemoteCommandHandler
         self._command_handler = RemoteCommandHandler()
         self._command_handler.set_shutdown_callback(self.stop)
-
-        # Remote command handler provides basic commands like 'ping'
-        # already initialised above
+        
+        # FIXED: Get node_url from config or instance variable, not undefined parameter
+        # Check if node_url was set by child class before calling super().__init__
+        if hasattr(self, 'node_url') and self.node_url:
+            # node_url was set by child class
+            if 'node_url' not in self.config:
+                self.config['node_url'] = self.node_url
+        elif 'node_url' in self.config:
+            # node_url was passed in config
+            self.node_url = self.config['node_url']
+        else:
+            # No node_url provided
+            self.node_url = None
+            
+        # FIXED: Use self.node_url instead of undefined node_url parameter
+        if self.node_url:
+            # Registry integration will be initialized later if needed
+            pass
+    
+    async def enhanced_task_delegation(self, task_description: str, task_type: str = None):
+        """Enhanced task delegation using registry"""
+        if hasattr(self, 'registry_integration'):
+            # First, try to find suitable external models
+            external_models = await self.discover_models(task_type)
+            
+            if external_models:
+                print(f"🔍 Found {len(external_models)} external models for {task_type}")
+                
+                # Try the best model first
+                best_model = external_models[0]
+                result = await self.delegate_task(best_model.id, task_description)
+                
+                if result:
+                    print(f"✅ Task delegated to {best_model.name}: {result}")
+                    return result
+            
+        # Fallback to local processing
+        return await self.process_task_locally(task_description)
         
     def start(self):
         """Start the Ultimate Agent"""
@@ -209,12 +253,10 @@ class UltimateAgent:
 
     def handle_command(self, command: str, **params: Any) -> Dict[str, Any]:
         """Execute a simple remote command.
-
         This delegates to :class:`~ultimate_agent.remote.handler.RemoteCommandHandler`
         which knows how to handle basic commands like ``ping`` or ``shutdown``.
         Additional keyword arguments are passed to the command handler.
         """
-
         result = self._command_handler.execute(command, **params)
         if command == "ping" and result.get("status") == "pong":
             return {"message": "pong"}
@@ -227,6 +269,14 @@ class UltimatePainNetworkAgent(UltimateAgent):
     def __init__(self, node_url: str = None, dashboard_port: int = None, config: Optional[Dict[str, Any]] = None):
         # Initialize config first
         config = config or {}
+        
+        # IMPORTANT FIX: Store node_url as instance variable BEFORE calling super().__init__
+        # This ensures it's available during parent class initialization
+        self.node_url = node_url
+        
+        # Store node_url in config if provided
+        if node_url:
+            config['node_url'] = node_url
         
         # Set dashboard port in config if provided
         if dashboard_port:
@@ -251,7 +301,16 @@ class UltimatePainNetworkAgent(UltimateAgent):
         self.task_scheduler = TaskScheduler(self.ai_manager, self.blockchain_manager)
         self.network_manager = NetworkManager(self.config_manager)
 
-        node_service_url = self.config_manager.get('DEFAULT', 'node_url', fallback='https://srvnodes.peoplesainetwork.com')
+        # FIXED: Get node_url from multiple sources with proper fallback
+        node_service_url = (
+            self.node_url or 
+            node_url or 
+            self.config_manager.get('DEFAULT', 'node_url', fallback='https://srvnodes.peoplesainetwork.com')
+        )
+        
+        # Update self.node_url with the final value
+        self.node_url = node_service_url
+        
         manager_service_url = self.config_manager.get('DISCOVERY', 'manager_service', fallback='http://mannodes.peoplesainetwork.com')
         self.discovery_client = DiscoveryClient(node_service_url, manager_service_url)
 
@@ -271,9 +330,6 @@ class UltimatePainNetworkAgent(UltimateAgent):
         self.current_tasks = {}
         self.completed_tasks = []
         self.start_time = time.time()
-
-        # Node URL and registration setup
-        self.node_url = node_url or self.config_manager.get('DEFAULT', 'node_url', fallback='https://srvnodes.peoplesainetwork.com')
         
         # Set the node URL in network manager
         self.network_manager.set_node_url(self.node_url)
@@ -295,6 +351,14 @@ class UltimatePainNetworkAgent(UltimateAgent):
         self.dashboard_port = dashboard_port or config.get('dashboard_port', 8080)
 
         self._initialize_local_ai()
+
+        # Initialize registry integration if available
+        if REGISTRY_INTEGRATION_AVAILABLE and self.node_url:
+            try:
+                self.registry_integration = integrate_registry(self)
+                print("✅ Registry integration initialized")
+            except Exception as e:
+                print(f"⚠️ Registry integration failed: {e}")
 
         print("✅ Ultimate Pain Network Agent initialized")
         print(f"🌐 Node URL: {self.node_url}")
@@ -373,7 +437,7 @@ class UltimatePainNetworkAgent(UltimateAgent):
             return False
 
         print("🎯 Agent started successfully!")
-
+        
         # Keep running
         try:
             while self.running:
@@ -687,9 +751,11 @@ class UltimatePainNetworkAgent(UltimateAgent):
             'plugin_support': True,
             'remote_management': True,
         }
+
         if hasattr(self, 'local_ai_manager') and self.local_ai_manager:
             capabilities['local_ai_inference'] = True
             capabilities['local_conversation'] = True
+
         return capabilities
 
     def start_task(self, task_type: str, task_config: Dict[str, Any]) -> str:
@@ -704,10 +770,12 @@ class UltimatePainNetworkAgent(UltimateAgent):
     def get_local_ai_status(self) -> Dict[str, Any]:
         if not self.local_ai_manager:
             return {'enabled': False, 'error': 'Local AI not available'}
+
         try:
             status = self.local_ai_manager.get_status()
             stats = self.local_ai_manager.get_stats()
             hardware = self.local_ai_manager.get_hardware_info()
+
             return {
                 'enabled': True,
                 'status': status,
@@ -729,9 +797,11 @@ class UltimatePainNetworkAgent(UltimateAgent):
                 'error': 'Conversation manager not available',
                 'response': 'Chat functionality is not currently available.',
             }
+
         try:
             if not conversation_id:
                 conversation_id = f"conv_{uuid.uuid4().hex[:8]}"
+
             return self.local_ai_conversation_manager.process_message(conversation_id, message, model_type=model_type)
         except Exception as e:
             return {
@@ -814,6 +884,7 @@ class UltimatePainNetworkAgent(UltimateAgent):
                 status['local_ai'] = {'enabled': True, 'error': str(e)}
         else:
             status['local_ai'] = {'enabled': False}
+
         return status
 
 

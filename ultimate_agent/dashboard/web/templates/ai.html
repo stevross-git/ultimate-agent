@@ -1,0 +1,301 @@
+<!-- Add to dashboard templates -->
+<div class="local-ai-section">
+    <h3>🧠 Local AI System</h3>
+    
+    <div class="hardware-info">
+        <h4>Hardware Information</h4>
+        <div id="hardware-details">
+            <div class="hardware-stat">
+                <span class="label">Type:</span>
+                <span id="hardware-type">-</span>
+            </div>
+            <div class="hardware-stat">
+                <span class="label">Memory:</span>
+                <span id="hardware-memory">-</span>
+            </div>
+            <div class="hardware-stat">
+                <span class="label">GPU:</span>
+                <span id="hardware-gpu">-</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="current-model">
+        <h4>Current Model</h4>
+        <div id="current-model-info">
+            <div class="model-stat">
+                <span class="label">Model:</span>
+                <span id="current-model-name">-</span>
+            </div>
+            <div class="model-stat">
+                <span class="label">Memory Usage:</span>
+                <span id="current-model-memory">-</span>
+            </div>
+            <div class="model-stat">
+                <span class="label">Performance:</span>
+                <span id="model-performance">-</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="available-models">
+        <h4>Available Models</h4>
+        <div id="models-list"></div>
+        <button onclick="refreshModels()" class="btn btn-primary">Refresh Models</button>
+    </div>
+    
+    <div class="local-ai-chat">
+        <h4>Local AI Chat Test</h4>
+        <div id="chat-container"></div>
+        <div class="chat-input">
+            <input type="text" id="chat-input" placeholder="Test local AI..." />
+            <button onclick="sendLocalAIMessage()" class="btn btn-success">Send</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Local AI Dashboard Functions
+function updateLocalAIStatus() {
+    fetch('/api/v4/local-ai/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateHardwareInfo(data.hardware);
+                updateCurrentModel(data.performance);
+                updateLocalAIModels();
+            }
+        })
+        .catch(error => console.error('Local AI status error:', error));
+}
+
+function updateHardwareInfo(hardware) {
+    document.getElementById('hardware-type').textContent = hardware.hardware_type;
+    document.getElementById('hardware-memory').textContent = 
+        hardware.system_info.memory_gb.toFixed(1) + ' GB';
+    document.getElementById('hardware-gpu').textContent = 
+        hardware.system_info.gpu_name || 'None';
+}
+
+function updateCurrentModel(performance) {
+    if (performance.current_model) {
+        document.getElementById('current-model-name').textContent = 
+            performance.current_model.name;
+        document.getElementById('current-model-memory').textContent = 
+            performance.current_model.memory_usage_gb.toFixed(1) + ' GB';
+        document.getElementById('model-performance').textContent = 
+            performance.inference_stats.tokens_per_second.toFixed(1) + ' tokens/s';
+    }
+}
+
+function updateLocalAIModels() {
+    fetch('/api/v4/local-ai/models')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayModels(data.models.recommended_models);
+            }
+        });
+}
+
+function displayModels(models) {
+    const container = document.getElementById('models-list');
+    container.innerHTML = '';
+    
+    models.forEach(model => {
+        const modelDiv = document.createElement('div');
+        modelDiv.className = 'model-item';
+        modelDiv.innerHTML = `
+            <div class="model-info">
+                <strong>${model.name}</strong>
+                <span class="model-size">${model.memory_gb} GB</span>
+                <span class="model-status ${model.available ? 'available' : 'needs-download'}">
+                    ${model.available ? '✅ Available' : '📥 Need Download'}
+                </span>
+            </div>
+            <div class="model-tags">
+                ${model.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+            </div>
+            ${!model.available ? 
+                `<button onclick="downloadModel('${model.full_name}')" class="btn btn-sm btn-outline">Download</button>` 
+                : ''}
+        `;
+        container.appendChild(modelDiv);
+    });
+}
+
+function downloadModel(modelName) {
+    const button = event.target;
+    button.textContent = 'Downloading...';
+    button.disabled = true;
+    
+    fetch('/api/v4/local-ai/models/download', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({model_name: modelName})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            button.textContent = '✅ Downloaded';
+            setTimeout(() => updateLocalAIModels(), 1000);
+        } else {
+            button.textContent = '❌ Failed';
+            console.error('Download failed:', data.error);
+        }
+    })
+    .catch(error => {
+        button.textContent = '❌ Error';
+        console.error('Download error:', error);
+    });
+}
+
+function sendLocalAIMessage() {
+    const input = document.getElementById('chat-input');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    // Add user message to chat
+    addChatMessage('user', message);
+    input.value = '';
+    
+    // Send to local AI
+    fetch('/api/v4/local-ai/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            input: message,
+            task_type: 'general'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            addChatMessage('ai', data.response, {
+                model: data.model_used,
+                time: data.processing_time,
+                speed: data.tokens_per_second
+            });
+        } else {
+            addChatMessage('error', 'Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        addChatMessage('error', 'Network error: ' + error);
+    });
+}
+
+function addChatMessage(type, content, metadata = {}) {
+    const container = document.getElementById('chat-container');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `chat-message ${type}`;
+    
+    let metadataHtml = '';
+    if (metadata.model) {
+        metadataHtml = `<div class="message-metadata">
+            Model: ${metadata.model} | 
+            Time: ${metadata.time?.toFixed(2)}s | 
+            Speed: ${metadata.speed?.toFixed(1)} tokens/s
+        </div>`;
+    }
+    
+    messageDiv.innerHTML = `
+        <div class="message-content">${content}</div>
+        ${metadataHtml}
+    `;
+    
+    container.appendChild(messageDiv);
+    container.scrollTop = container.scrollHeight;
+}
+
+function refreshModels() {
+    updateLocalAIModels();
+}
+
+// Initialize local AI status on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateLocalAIStatus();
+    
+    // Update every 30 seconds
+    setInterval(updateLocalAIStatus, 30000);
+});
+</script>
+
+<style>
+.local-ai-section {
+    margin: 20px 0;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+.hardware-stat, .model-stat {
+    display: flex;
+    justify-content: space-between;
+    margin: 5px 0;
+}
+
+.model-item {
+    border: 1px solid #eee;
+    border-radius: 5px;
+    padding: 10px;
+    margin: 10px 0;
+}
+
+.model-tags {
+    margin-top: 5px;
+}
+
+.tag {
+    background: #e1f5fe;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+    margin-right: 5px;
+}
+
+.chat-message {
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.chat-message.user {
+    background: #e3f2fd;
+    text-align: right;
+}
+
+.chat-message.ai {
+    background: #f3e5f5;
+}
+
+.chat-message.error {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.message-metadata {
+    font-size: 11px;
+    color: #666;
+    margin-top: 5px;
+}
+
+.chat-input {
+    display: flex;
+    margin-top: 10px;
+}
+
+.chat-input input {
+    flex: 1;
+    margin-right: 10px;
+}
+
+#chat-container {
+    height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 5px;
+}
+</style>

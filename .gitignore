@@ -1,0 +1,8 @@
+**/__pycache__/**
+ultimate_agent/=0.33.0
+ultimate_agent/=2.0.0
+ultimate_agent/=4.0.0
+ultimate_agent/=5.0.0
+ultimate_agent/agent_id.txt
+ultimate_agent/agent_stats.json
+**/venv/**

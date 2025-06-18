@@ -1,0 +1,66 @@
+# requirements.txt
+# Enhanced Ultimate Pain Network Agent - Modular Architecture
+# Core dependencies for the modular agent system
+
+# Core Framework Dependencies
+requests>=2.28.0
+flask>=2.3.0
+flask-cors>=4.0.0
+flask-socketio>=5.3.0
+flask-limiter>=3.3.0
+
+# Data Processing & Science
+numpy>=1.21.0
+pandas>=1.5.0
+scipy>=1.9.0
+
+# Database & Storage
+sqlalchemy>=1.4.0
+# sqlite3  # Built-in with Python
+
+# System Monitoring & Performance
+psutil>=5.9.0
+
+# Security & Encryption
+cryptography>=3.4.8
+bcrypt>=4.0.0
+
+# Optional AI/ML Dependencies
+torch>=1.13.0; sys_platform != "darwin" or platform_machine != "arm64"
+torch>=1.13.0; sys_platform == "darwin" and platform_machine == "arm64"
+torchvision>=0.14.0
+huggingface_hub>=0.19.0
+
+# Optional GPU Monitoring
+GPUtil>=1.4.0
+
+# Optional Cloud Dependencies
+boto3>=1.26.0          # AWS
+azure-storage-blob>=12.14.0  # Azure
+google-cloud-storage>=2.7.0  # GCP
+
+# Development & Testing (optional)
+pytest>=7.2.0
+pytest-asyncio>=0.21.0
+pytest-benchmark>=4.0.0
+black>=22.0.0
+flake8>=5.0.0
+mypy>=0.991
+
+# Networking & Communication
+websocket-client>=1.4.0
+urllib3>=1.26.0
+
+# Utilities
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+python-dateutil>=2.8.0
+pathlib2>=2.3.0; python_version < "3.4"
+configparser>=5.3.0
+
+
+# Advanced Ollama Integration
+ollama>=0.1.7
+aiohttp>=3.8.0
+GPUtil>=1.4.0  # Optional: GPU monitoring

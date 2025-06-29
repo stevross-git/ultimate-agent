@@ -133,6 +133,29 @@ curl -X POST http://localhost:8080/api/start_task \
   -d '{"type": "neural_network_training"}'
 ```
 
+### **P2P Hello World Example**
+
+This quick demo shows two peers exchanging a message using the quantum P2P module.
+Python **3.11** is recommended.
+
+```bash
+# Create a virtual environment
+python3.11 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the example
+python -m ultimate_agent.examples.p2p_hello_world
+```
+
+To run the test suite afterwards:
+
+```bash
+python -m pytest
+```
+
 ---
 
 ## ⚙️ **Configuration**

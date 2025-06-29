@@ -6,7 +6,10 @@ from pathlib import Path
 # Add Ultimate Agent to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-async def test_local_ai():
+def test_local_ai():
+    asyncio.run(run_test())
+
+async def run_test():
     print("🧪 Testing Local AI Integration...")
     
     try:
@@ -55,4 +58,4 @@ async def test_local_ai():
         traceback.print_exc()
 
 if __name__ == "__main__":
-    asyncio.run(test_local_ai())
+    asyncio.run(run_test())

@@ -1,6 +1,6 @@
 """
 Ultimate Agent Core - Main Agent Coordination
-Fixed version with proper node registration
+Fixed version with proper node registration and hive integration
 """
 import asyncio
 import logging
@@ -41,6 +41,14 @@ try:
 except ImportError:
     REGISTRY_INTEGRATION_AVAILABLE = False
     print("⚠️ Registry integration not available")
+
+# Hive integration import
+try:
+    from ..ai.hive_integration import integrate_hive
+    HIVE_INTEGRATION_AVAILABLE = True
+except ImportError:
+    HIVE_INTEGRATION_AVAILABLE = False
+    print("⚠️ Hive integration not available")
 
 try:
     from ..ai.local_models.local_ai_manager import (
@@ -264,7 +272,7 @@ class UltimateAgent:
 
 
 class UltimatePainNetworkAgent(UltimateAgent):
-    """Enhanced agent combining all functionality with automatic node registration."""
+    """Enhanced agent combining all functionality with automatic node registration and hive integration."""
 
     def __init__(self, node_url: str = None, dashboard_port: int = None, config: Optional[Dict[str, Any]] = None):
         # Initialize config first
@@ -360,8 +368,20 @@ class UltimatePainNetworkAgent(UltimateAgent):
             except Exception as e:
                 print(f"⚠️ Registry integration failed: {e}")
 
+        # Initialize hive integration if available
+        if HIVE_INTEGRATION_AVAILABLE:
+            try:
+                self.hive_client = integrate_hive(self)
+                print("✅ Hive integration initialized")
+            except Exception as e:
+                print(f"⚠️ Hive integration failed: {e}")
+                self.hive_client = None
+        else:
+            self.hive_client = None
+
         print("✅ Ultimate Pain Network Agent initialized")
         print(f"🌐 Node URL: {self.node_url}")
+        print(f"🧠 Hive URL: {self.config_manager.get('HIVE', 'coordination_url', fallback='Not configured')}")
         print(f"📊 Dashboard will be available on port {self.dashboard_port}")
         print(f"🌐 Agent will register to: {self.node_url}")
 
@@ -402,7 +422,7 @@ class UltimatePainNetworkAgent(UltimateAgent):
         return agent_id
 
     def start(self) -> bool:
-        """Enhanced start method with automatic registration"""
+        """Enhanced start method with automatic registration and hive connection"""
         print(f"\n🚀 Starting Enhanced Ultimate Pain Network Agent")
         print(f"🆔 Agent ID: {self.agent_id}")
         print(f"🌐 Node URL: {self.node_url}")
@@ -428,6 +448,14 @@ class UltimatePainNetworkAgent(UltimateAgent):
             # Start node registration process
             self._start_registration_process()
             
+            # Start hive connection if available
+            if self.hive_client:
+                hive_success = self.hive_client.start()
+                if hive_success:
+                    print("✅ Hive connection started")
+                else:
+                    print("⚠️ Hive connection failed to start")
+            
             print("✅ All managers started successfully")
             
         except Exception as e:
@@ -437,6 +465,11 @@ class UltimatePainNetworkAgent(UltimateAgent):
             return False
 
         print("🎯 Agent started successfully!")
+        print("\n📊 Connection Status:")
+        print(f"   🌐 Node Registration: {'✅ Active' if self.registered else '⏳ Connecting'}")
+        if self.hive_client:
+            hive_status = self.hive_client.get_hive_status()
+            print(f"   🧠 Hive Connection: {'✅ Active' if hive_status['connected'] else '⏳ Connecting'}")
         
         # Keep running
         try:
@@ -548,7 +581,7 @@ class UltimatePainNetworkAgent(UltimateAgent):
         return {
             'agent_id': self.agent_id,
             'agent_type': 'UltimatePainNetworkAgent',
-            'version': '4.0-modular',
+            'version': '4.0-modular-hive',
             'node_url': self.node_url,
             'dashboard_port': self.dashboard_port,
             
@@ -557,6 +590,7 @@ class UltimatePainNetworkAgent(UltimateAgent):
             'blockchain_enabled': hasattr(self, 'blockchain_manager') and self.blockchain_manager is not None,
             'task_scheduling_enabled': hasattr(self, 'task_scheduler') and self.task_scheduler is not None,
             'dashboard_enabled': hasattr(self, 'dashboard_manager') and self.dashboard_manager is not None,
+            'hive_enabled': hasattr(self, 'hive_client') and self.hive_client is not None,
             
             # AI capabilities
             'ai_models_available': self._get_available_ai_models(),
@@ -589,7 +623,7 @@ class UltimatePainNetworkAgent(UltimateAgent):
     
     def _get_heartbeat_data(self) -> Dict[str, Any]:
         """Get data for heartbeat messages"""
-        return {
+        heartbeat_data = {
             'agent_id': self.agent_id,
             'status': 'online' if self.running else 'offline',
             'uptime': time.time() - self.start_time,
@@ -602,6 +636,14 @@ class UltimatePainNetworkAgent(UltimateAgent):
             'network_stats': self.network_manager.get_connection_stats(),
             'dashboard_active': hasattr(self, 'dashboard_manager') and self.dashboard_manager is not None
         }
+        
+        # Add hive status if available
+        if self.hive_client:
+            hive_status = self.hive_client.get_hive_status()
+            heartbeat_data['hive_connected'] = hive_status['connected']
+            heartbeat_data['hive_swarm_id'] = hive_status.get('swarm_id')
+        
+        return heartbeat_data
     
     def _get_available_ai_models(self) -> list:
         """Get list of available AI models"""
@@ -720,6 +762,7 @@ class UltimatePainNetworkAgent(UltimateAgent):
                 'monitoring_manager': True,
                 'dashboard_manager': self.dashboard_manager is not None,
                 'network_manager': True,
+                'hive_client': self.hive_client is not None,
             },
             'ai_models_loaded': 7,  # From your logs
             'blockchain_enhanced': True,
@@ -750,6 +793,7 @@ class UltimatePainNetworkAgent(UltimateAgent):
             'monitoring': True,
             'plugin_support': True,
             'remote_management': True,
+            'hive_integration': self.hive_client is not None,
         }
 
         if hasattr(self, 'local_ai_manager') and self.local_ai_manager:
@@ -834,14 +878,18 @@ class UltimatePainNetworkAgent(UltimateAgent):
         super().start()
 
     def stop(self):
-        """Enhanced stop method with proper cleanup"""
+        """Enhanced stop method with proper cleanup including hive"""
         print("🛑 Stopping Enhanced Ultimate Pain Network Agent...")
         self.running = False
+        
+        # Stop hive connection first
+        if self.hive_client:
+            self.hive_client.stop()
+            print("✅ Hive connection stopped")
         
         # Unregister from node
         if self.registered:
             try:
-                # Send final status
                 self.network_manager.send_heartbeat(self.agent_id, {
                     'agent_id': self.agent_id,
                     'status': 'shutdown',
@@ -866,7 +914,27 @@ class UltimatePainNetworkAgent(UltimateAgent):
         print("🎯 Agent stopped successfully")
 
     def get_enhanced_status(self):
+        """Get enhanced status including both node and hive connections"""
         status = self.get_status()
+        
+        # Add node connection status
+        status['node_connection'] = {
+            'connected': self.registered,
+            'node_url': self.node_url,
+            'registration_attempts': self.registration_attempts,
+            'last_heartbeat': self.stats.get('last_heartbeat')
+        }
+        
+        # Add hive connection status
+        if self.hive_client:
+            status['hive_connection'] = self.hive_client.get_hive_status()
+        else:
+            status['hive_connection'] = {
+                'connected': False,
+                'reason': 'Hive integration not available'
+            }
+        
+        # Add local AI status
         if hasattr(self, 'local_ai_manager') and self.local_ai_manager:
             try:
                 local_ai_status = self.local_ai_manager.get_status()

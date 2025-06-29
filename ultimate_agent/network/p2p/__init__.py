@@ -13,13 +13,22 @@ from .distributed_ai import (
     NodeCapability
 )
 
+from .quantum_crypto import QuantumEncryptionProtocol
+from .adaptive_routing import CSPAdaptiveRouting
+from .fault_tolerance import CSPFaultTolerance
+from .quantum_enhanced_p2p import QuantumEnhancedP2PManager
+
 __all__ = [
     'P2PNetworkManager',
     'P2PDistributedAIIntegration', 
     'NodeType',
     'MessageType',
     'InferenceTask',
-    'NodeCapability'
+    'NodeCapability',
+    'QuantumEncryptionProtocol',
+    'CSPAdaptiveRouting',
+    'CSPFaultTolerance',
+    'QuantumEnhancedP2PManager'
 ]
 
 # File 2: ultimate_agent/network/p2p/integration.py
